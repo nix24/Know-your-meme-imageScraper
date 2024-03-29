@@ -1,6 +1,8 @@
 from bs4 import BeautifulSoup
 import os
 import requests
+import re
+from numba import jit
 
 folder = ""
 
@@ -10,6 +12,10 @@ class ImageObject:
         self.id = id
         self.title = title
         self.url = url
+
+
+def sanitize_filename(filename):
+    return re.sub(r'[\\/*?:"<>|]', "_", filename)
 
 
 def extract_image_urls(topic: str, number_pages: int) -> None:
@@ -28,10 +34,9 @@ def extract_image_urls(topic: str, number_pages: int) -> None:
 
         image_links = soup.find_all("a", class_="photo")
         for j, link in enumerate(image_links):
-            # if img_urls > 0 so 1st image is already downloaded
-            # just break the loop
-            if len(image_urls) > 4:
-                break
+            # FOR TESTING PURPOSES
+            # if len(image_urls) > 0:
+            #     break
             if "href" in link.attrs:
                 image_slug = link["href"].split("/")[-1]
                 image_slug_url = f"https://knowyourmeme.com/photos/{image_slug}"
@@ -50,7 +55,9 @@ def extract_image_urls(topic: str, number_pages: int) -> None:
                         .replace("\\", "_")
                         .replace(" | ", "_")
                     )
-                    print(title)
+                    # clean text to make sure UnicodeEncodeError doesn't occur
+                    title = title.encode("ascii", "ignore").decode("ascii")
+                    print(f"Title: {title}")
                 else:
                     title = f"image_{i}_{j}"
 
@@ -58,10 +65,9 @@ def extract_image_urls(topic: str, number_pages: int) -> None:
                 if image_element and "src" in image_element.attrs:
                     image_url = image_element["src"]
                     image_obj = ImageObject(f"{i}_{j}", title, image_url)
-                    print(image_obj)
                     if image_obj.url not in [obj.url for obj in image_urls]:
                         image_urls.append(image_obj)
-                        print(f"Found image {i}_{j} from {image_url}")
+                        print(f"Found image {i}_{j}")
                     else:
                         print(f"skipping dup image {i}_{j}")
                 else:
@@ -96,16 +102,19 @@ images_directory = f"topics/{topic}/images"
 os.makedirs(images_directory, exist_ok=True)
 
 # Download each image
+# Download each image
 for image_obj in image_objs:
     response = requests.get(image_obj.url)
     if response.status_code == 200:
         file_extension = os.path.splitext(image_obj.url)[-1]
         if not file_extension:
             file_extension = ".jpg"  # Set default file extension to ".jpg"
-        file_name = f"{image_obj.title}{file_extension}"
-        file_path = os.path.join(images_directory, file_name)
+        file_title = image_obj.title.replace(" ", "-")
+        file_name = f"{file_title}{file_extension}"
+        sanitized_file_name = sanitize_filename(file_name)
+        file_path = os.path.join(images_directory, sanitized_file_name)
         with open(file_path, "wb") as file:
             file.write(response.content)
-        print(f"Downloaded image {image_obj.id}: {file_name}")
+        print(f"Downloaded image {image_obj.id}: {sanitized_file_name}")
     else:
         print(f"Failed to download image {image_obj.id}: {image_obj.url}")
