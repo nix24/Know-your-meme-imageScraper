@@ -3,6 +3,7 @@ import os
 import requests
 import re
 from numba import jit
+from multiprocessing import Pool
 
 folder = ""
 
@@ -14,11 +15,25 @@ class ImageObject:
         self.url = url
 
 
-def sanitize_filename(filename):
-    return re.sub(r'[\\/*?:"<>|]', "_", filename)
+def sanitize_filename(filename: str) -> str:
+    # Split the filename into name and extension
+    name, ext = os.path.splitext(filename)
+
+    name = name.replace(" ", "_")
+    name = re.sub(
+        r"[^a-zA-Z0-9_.-]", "", name
+    )  # Remove all non-alphanumeric characters except spaces, hyphens, and periods
+    name = re.sub(
+        r"_{2,}", "_", name
+    )  # Replace multiple underscores with a single underscore
+
+    # Construct the sanitized filename with the original extension
+    sanitized_filename = name + ext
+
+    return sanitized_filename
 
 
-def extract_image_urls(topic: str, number_pages: int) -> None:
+def extract_image_urls(topic: str, number_pages: int, page_start: int) -> None:
     folder = f"topics/{topic}"
     url_base = f"https://knowyourmeme.com/memes/{topic}/photos/sort/score"
     os.makedirs(folder, exist_ok=True)
@@ -28,7 +43,8 @@ def extract_image_urls(topic: str, number_pages: int) -> None:
     for i in range(1, number_pages + 1):
         print(f"Searching page {i} of {number_pages}...")
 
-        url = f"{url_base}/page/{i}"
+        url = f"{url_base}/page/{page_start + i - 1}"
+        print(f"Searching page #{page_start + i - 1}...")
         res = requests.get(url)
         soup = BeautifulSoup(res.text, "html.parser")
 
@@ -85,7 +101,8 @@ def extract_image_urls(topic: str, number_pages: int) -> None:
 # Example usage
 topic = input("Enter the topic: ")
 num_pages = int(input("Enter the number of pages to search through: "))
-extract_image_urls(topic, num_pages)
+page_start = int(input("Enter the page to start from: "))
+extract_image_urls(topic, num_pages, page_start)
 
 # images successfully in .txt file
 # download images
@@ -101,7 +118,6 @@ with open(image_urls_file, "r") as file:
 images_directory = f"topics/{topic}/images"
 os.makedirs(images_directory, exist_ok=True)
 
-# Download each image
 # Download each image
 for image_obj in image_objs:
     response = requests.get(image_obj.url)
